@@ -13,6 +13,10 @@ on:
 
   workflow_dispatch:
     inputs:
+        id:
+          description: 'Optional for manual trigger. Mandatory for Bot triggered. Specify unique ID for bot to track workflow state'
+          required: false
+          default: ''
         mode:
           description: 'modes: full (run on all project), diff (run on the last commit diff), commit (especify a commit to calculate diff)'
           required: true
@@ -23,6 +27,12 @@ on:
           default: ''
 
 jobs:
+  id:
+    name: Workflow ID provider
+    runs-on: ubuntu-latest
+    steps:
+      - name: ${{github.event.inputs.id}}
+        run: echo run identifier ${{ inputs.id }}
   eventBased:
     runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch'
