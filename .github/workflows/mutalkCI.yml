@@ -2,7 +2,7 @@ name: MutalkCI
 
 env:
   ENDPOINT: "http://mutation-testing-coverage.herokuapp.com"
-  API_KEY: ${{ secrects.API_KEY }}
+  API_KEY: ${{ secrets.API_KEY }}
 
 on:
   push:
