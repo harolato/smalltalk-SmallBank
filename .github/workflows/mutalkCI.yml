@@ -181,7 +181,10 @@ jobs:
           method: 'POST'
           customHeaders: |
             {
-              "x-api-key": ${{ secrets.API_KEY }}
+              "x-api-key": "${{ secrets.API_KEY }}"
             }
-          id: ${{ inputs.id }}
-          message: "Status message: FAILURE"
+          data: |
+            {
+              "id": "${{ inputs.id }}",
+              "message": "Status message: FAILURE"
+            }
