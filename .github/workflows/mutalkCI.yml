@@ -182,7 +182,7 @@ jobs:
           method: 'POST'
           customHeaders: |
             {
-              "x-api-key": "$API_KEY"
+              "x-api-key": "${{ API_KEY }}"
             }
           data: |
             {
