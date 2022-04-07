@@ -173,9 +173,7 @@ jobs:
               )
       - name: failure message
         if: ${{ failure() }}
-        with:
-          text: "Evaluation failed because."
+        run: echo "This is a success message log if needed..."
       - name: success message
         if: ${{ success() }}
-        with:
-          text: ":heavy_check_mark: eval success :heavy_check_mark:"
+        run: echo "This is a failure message log..."
