@@ -2,7 +2,6 @@ name: MutalkCI
 
 env:
   ENDPOINT: "http://mutation-testing-coverage.herokuapp.com"
-  API_KEY: ${{ secrets.API_KEY }}
 
 on:
   push:
@@ -182,7 +181,7 @@ jobs:
           method: 'POST'
           customHeaders: |
             {
-              "x-api-key": "${{ API_KEY }}"
+              "x-api-key": "${{ secrets.API_KEY }}"
             }
           data: |
             {
