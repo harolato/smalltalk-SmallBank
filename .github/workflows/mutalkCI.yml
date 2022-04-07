@@ -2,6 +2,7 @@ name: MutalkCI
 
 env:
   ENDPOINT: "http://mutation-testing-coverage.herokuapp.com"
+  API_KEY: ${{ secrects.API_KEY }}
 
 on:
   push:
@@ -181,10 +182,10 @@ jobs:
           method: 'POST'
           customHeaders: |
             {
-              "x-api-key": "${{ secrets.API_KEY }}"
+              "x-api-key": "$API_KEY"
             }
           data: |
             {
-              "id": "${{ inputs.id }}",
+              "id": "${{ github.event.inputs.id }}",
               "message": "Status message: FAILURE"
             }
