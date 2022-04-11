@@ -1,0 +1,190 @@
+name: MutalkCI
+
+env:
+  ENDPOINT: "http://mutation-testing-coverage.herokuapp.com"
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '**.st'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '**.st'
+
+  workflow_dispatch:
+    inputs:
+      id:
+        description: 'Optional for manual trigger. Mandatory for Bot triggered. Specify unique ID for bot to track workflow state'
+        required: false
+        default: ''
+      mode:
+        description: 'modes: full (run on all project), diff (run on the last commit diff), commit (especify a commit to calculate diff)'
+        required: true
+        default: 'full'
+      commit:
+        description: 'If mode == commit, here you enter the Commid id/name/shortId to evaluate the diff'
+        required: false
+        default: ''
+
+jobs:
+  id:
+    name: Workflow ID provider
+    runs-on: ubuntu-latest
+    steps:
+      - name: ${{github.event.inputs.id}}
+        run: echo run identifier ${{ inputs.id }}
+  eventBased:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: hpi-swa/setup-smalltalkCI@v1
+        id: smalltalkci
+        with:
+          smalltalk-version: Pharo64-stable
+
+      - run: smalltalkci -s ${{ steps.smalltalkci.outputs.smalltalk-version }}
+        shell: bash
+        timeout-minutes: 15
+
+      - run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} metacello install "github://mabdi/mutalk/src" BaselineOfMuTalk
+        shell: bash
+
+      - run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} mutalk --project=${{github.event.repository.name}} --diff
+        shell: bash
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mutation-testing-output
+          path: ${{env.SMALLTALK_CI_BUILD_BASE}}/__mutalk_export.json
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 14
+
+
+      - run: npm install request
+      - id: pushjson
+        uses: actions/github-script@v4
+        with:
+          script: |
+            const fs = require('fs')
+            import request, { Response } from 'request';
+
+            const data = fs.readFileSync(process.env.SMALLTALK_CI_BUILD_BASE + '/__mutalk_export.json', 'utf8')
+            const url = 'https://mutation-testing-coverage.herokuapp.com/api/v1/jobs/'
+            request.post({
+                url: url,
+                body: data,
+                json: true
+              }, (error , _response , data) => {
+                  if (error) {
+                    throw new Error(error);
+                  }
+                  try {
+                    if (data.done) {
+                      core.setOutput('coveralls-api-result', JSON.stringify(data));
+                    } else {
+                      throw new Error(JSON.stringify(data));
+                    }
+                  } catch(err) {
+                    throw new Error('Parallel webhook error:' + err + ', ' + JSON.stringify(data));
+                  }
+                }
+              )
+  
+
+  manual:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: hpi-swa/setup-smalltalkCI@v1
+        id: smalltalkci
+        with:
+          smalltalk-version: Pharo64-stable
+
+      - run: smalltalkci -s ${{ steps.smalltalkci.outputs.smalltalk-version }}
+        shell: bash
+        timeout-minutes: 15
+
+      - run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} metacello install "github://mabdi/mutalk/src" BaselineOfMuTalk
+        shell: bash
+
+      - name: full mutation testing
+        if: github.event.inputs.mode == 'full'
+        run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} mutalk --project=${{github.event.repository.name}}
+
+      - name: diff mutation testing
+        if: github.event.inputs.mode == 'diff'
+        run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} mutalk --project=${{github.event.repository.name}}  --diff
+
+      - name: commit mutation testing
+        if: github.event.inputs.mode == 'commit'
+        run: ${{env.SMALLTALK_CI_VM}} ${{env.SMALLTALK_CI_IMAGE}} mutalk --project=${{github.event.repository.name}} --commit=${{github.event.inputs.commit}}
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mutation-testing-output
+          path: ${{env.SMALLTALK_CI_BUILD_BASE}}/__mutalk_export.json
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 14
+
+      - run: npm install request
+      - id: pushjson
+        uses: actions/github-script@v4
+        env:
+          MUTALKCI_API_KEY: ${{ secrets.MUTALKCI_API_KEY }}
+        with:
+          script: |
+            const fs = require('fs')
+            const request = require('request')
+
+            const data = JSON.parse(fs.readFileSync(process.env.SMALLTALK_CI_BUILD_BASE + '/__mutalk_export.json', 'utf8'))
+            const url = 'https://mutation-testing-coverage.herokuapp.com/api/v1/jobs/'
+            request.post({
+                url: url,
+                headers: {
+                    'x-api-key': '85351620962c5f9b923073b1fd8a0053cd2b6e75d8eb195c5e5ee42526edd9ec'
+                  },
+                body: data,
+                json: true
+              }, (error , _response , data) => {
+                  if (error) {
+                    throw new Error(error);
+                  }
+                  try {
+                    if (data.done) {
+                      core.setOutput('coveralls-api-result', JSON.stringify(data));
+                    } else {
+                      throw new Error(JSON.stringify(data));
+                    }
+                  } catch(err) {
+                    throw new Error('Parallel webhook error:' + err + ', ' + JSON.stringify(data));
+                  }
+                }
+              )
+      - name: failure message
+        if: ${{ failure() }}
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: '${{ env.ENDPOINT }}/api/v1/notifications/'
+          method: 'POST'
+          customHeaders: |
+            {
+              "x-api-key": "${{ secrets.API_KEY }}"
+            }
+          data: |
+            {
+              "id": "${{ github.event.inputs.id }}",
+              "message": "Status message: FAILURE"
+            }
